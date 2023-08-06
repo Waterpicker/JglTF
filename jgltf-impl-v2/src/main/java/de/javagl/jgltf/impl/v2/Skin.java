@@ -51,10 +51,6 @@ public class Skin
      * 
      */
     public void setInverseBindMatrices(Integer inverseBindMatrices) {
-        if (inverseBindMatrices == null) {
-            this.inverseBindMatrices = inverseBindMatrices;
-            return ;
-        }
         this.inverseBindMatrices = inverseBindMatrices;
     }
 
