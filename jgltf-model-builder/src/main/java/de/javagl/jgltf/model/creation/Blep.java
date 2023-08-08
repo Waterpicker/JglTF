@@ -1,14 +1,13 @@
 package de.javagl.jgltf.model.creation;
 
-import de.javagl.jgltf.impl.v2.Node;
 import de.javagl.jgltf.model.*;
 import de.javagl.jgltf.model.impl.*;
 import de.javagl.jgltf.model.io.Buffers;
 import de.javagl.jgltf.model.io.GltfAssetReader;
 import de.javagl.jgltf.model.io.v2.GltfModelWriterV2;
 import de.javagl.jgltf.model.v2.MaterialModelV2;
-import dev.thecodewarrior.binarysmd.studiomdl.SkeletonBlock;
 import dev.thecodewarrior.binarysmd.studiomdl.TrianglesBlock;
+import org.joml.Math;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -28,10 +27,6 @@ import java.util.function.Supplier;
 
 public class Blep {
     public static void main(String[] args) throws IOException {
-        var gltfReference = new GltfAssetReader().readWithoutReferences(Files.newInputStream(Path.of("C:\\Users\\water\\Downloads\\berry.glb")));
-
-        var m = GltfModels.create(gltfReference);
-
         var fc = new JFileChooser();
         fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         fc.setCurrentDirectory(new File("C:\\Users\\water\\Downloads\\"));
@@ -56,62 +51,10 @@ public class Blep {
                 var triangles = body.triangles();
 
                 var boneMap = new HashMap<Integer, SMDModelAdjuster.Node>();
-                var bondList = new ArrayList<>();
+
                 var rootNode = SMDModelAdjuster.readStructure(nodes, boneMap, skeleton);
 
-//                var rootTransform = new Pair<>(rootNode.getRotation(), rootNode.getTranslation());
-//                rootNode.setRotation(null);
-//                rootNode.setTranslation(null);
-
                 var skin = createSkin(rootNode);
-
-                var animations = model.get().animations();
-
-                var animationList =
-                animations.entrySet().stream().map(entry -> {
-                    var key = entry.getKey();
-                    var value = entry.getValue();
-                    var keyframes = parseKeyFrames(boneMap, value.skeleton().keyframes);
-                    var input = new ArrayList<Float>();
-                    var outputPos = new HashMap<NodeModel, List<Vector3f>>();
-                    var outputRot = new HashMap<NodeModel, List<Quaternionf>>();
-
-                    for (int time = 0; time < keyframes.size(); time++) {
-                        var states = keyframes.get(time);
-                        input.add((float) time);
-
-                        for (SmdAnimationData data : states) {
-                            outputPos.computeIfAbsent(data.bone, d -> new ArrayList<>()).add(data.pos);
-
-                            outputRot.computeIfAbsent(data.bone, d -> new ArrayList<>()).add(data.rot);
-                        }
-                    }
-
-                    var animationModel = new DefaultAnimationModel();
-                    animationModel.setName(key);
-
-                    outputPos.forEach((k, v) -> {
-                        var pair = processAnimationChannel(input, v);
-                        var timestamps = AccessorModels.create(GltfConstants.GL_FLOAT, "SCALAR", false, Buffers.createByteBufferFrom(convert(pair.a())));
-                        var rotations = AccessorModels.create(GltfConstants.GL_FLOAT, "VEC3", false, Buffers.createByteBufferFrom(convertVec(pair.b())));
-
-                        var sampler = new DefaultAnimationModel.DefaultSampler(timestamps, AnimationModel.Interpolation.LINEAR, rotations);
-                        animationModel.addChannel(new DefaultAnimationModel.DefaultChannel(sampler, k, "translation"));
-                    });
-
-                    System.out.println(entry.getKey());
-                    outputRot.forEach((k, v) -> {
-                        var pair = processAnimationChannel(input, v);
-                        var timestamps = AccessorModels.create(GltfConstants.GL_FLOAT, "SCALAR", false, Buffers.createByteBufferFrom(convert(pair.a())));
-                        var rotations = AccessorModels.create(GltfConstants.GL_FLOAT, "VEC4", false, Buffers.createByteBufferFrom(convertQuat(pair.b())));
-
-                        var sampler = new DefaultAnimationModel.DefaultSampler(timestamps, AnimationModel.Interpolation.LINEAR, rotations);
-                        animationModel.addChannel(new DefaultAnimationModel.DefaultChannel(sampler, k, "rotation"));
-                    });
-
-                    return animationModel;
-                }).toList();
-
 
                 var vertices = new ArrayList<TrianglesBlock.Vertex>();
                 var indexBuffer = new ArrayList<Integer>();
@@ -124,6 +67,8 @@ public class Blep {
 
                 Function<Integer, Integer> boneCorrection = index -> skin.getJoints().indexOf(boneMap.get(index));
 
+                var rotation = new Quaternionf().rotationX(Math.toRadians(-90));
+
                 for (TrianglesBlock.Triangle triangle : triangles.triangles) {
                     for (TrianglesBlock.Vertex vertex : triangle.vertices) {
                         var index = vertices.indexOf(vertex);
@@ -131,9 +76,16 @@ public class Blep {
                         if (index == -1) {
                             index = vertices.size();
                             vertices.add(vertex);
-                            posBuffer.add(vertex.posX);
-                            posBuffer.add(-vertex.posY);
-                            posBuffer.add(-vertex.posZ);
+
+                            var vec = new Vector3f(vertex.posX,
+                                    -vertex.posY,
+                                    -vertex.posZ);
+
+                            rotation.transform(vec);
+
+                            posBuffer.add(vec.x);
+                            posBuffer.add(vec.y);
+                            posBuffer.add(vec.z);
                             texCoordBuffer.add(vertex.u);
                             texCoordBuffer.add(1 - vertex.v);
                             normalBuffer.add(vertex.normX);
@@ -219,60 +171,6 @@ public class Blep {
         skin.setInverseBindMatrices(AccessorModels.create(GltfConstants.GL_FLOAT, "MAT4", false, Buffers.createByteBufferFrom(convertMatrix(inverseBindPoses))));
         skin.setSkeleton(rootNode);
         return skin;
-    }
-
-    private static FloatBuffer convertQuat(List<Quaternionf> v) {
-        var length = v.size() * 4;
-        var buffer = FloatBuffer.allocate(length);
-
-        for (var quat : v) {
-            buffer.put(quat.x()).put(quat.y()).put(quat.z()).put(quat.w());
-        }
-
-        return buffer;
-    }
-
-    private static FloatBuffer convertVec(List<Vector3f> v) {
-        var length = v.size() * 3;
-        var buffer = FloatBuffer.allocate(length);
-
-        for (var quat : v) {
-            buffer.put(quat.x()).put(quat.y()).put(quat.z());
-        }
-
-        return buffer;
-    }
-
-    private static Quaternionf eulertoQuatArray(float x, float y, float z) {
-        return new Quaternionf().rotateXYZ(x, y, z);
-    }
-
-    private static List<List<SmdAnimationData>> parseKeyFrames(Map<Integer, SMDModelAdjuster.Node> boneMap, List<SkeletonBlock.Keyframe> keyframes) {
-        keyframes.sort(Comparator.comparingInt(a -> a.time));
-
-
-        List<List<SmdAnimationData>> list = new ArrayList<>();
-        for (SkeletonBlock.Keyframe a : keyframes) {
-            List<SmdAnimationData> pairs = a.states.stream().map(state -> new SmdAnimationData(boneMap.get(state.bone), new Vector3f(state.posX, state.posY, state.posZ), eulertoQuatArray(state.rotX, state.rotY, state.rotZ))).toList();
-            list.add(pairs);
-        }
-        return list;
-    }
-
-    public record SmdAnimationData(SMDModelAdjuster.Node bone, Vector3f pos, Quaternionf rot) {}
-
-    public static <T> Pair<List<Float>, List<T>> processAnimationChannel(List<Float> timestamps, List<T> channelData) {
-        List<Float> newTimestamps = new ArrayList<>();
-        Set<T> uniqueElements = new HashSet<>();
-
-        for (int i = 0; i < channelData.size(); i++) {
-            T currentElement = channelData.get(i);
-            if (uniqueElements.add(currentElement)) {
-                newTimestamps.add(timestamps.get(i));
-            }
-        }
-
-        return new Pair(newTimestamps, new ArrayList<>(uniqueElements));
     }
 
     private static IntBuffer convertInt(List<Integer> values) {

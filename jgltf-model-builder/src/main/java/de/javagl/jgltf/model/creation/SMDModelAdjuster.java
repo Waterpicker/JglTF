@@ -5,6 +5,7 @@ import dev.thecodewarrior.binarysmd.studiomdl.NodesBlock;
 import dev.thecodewarrior.binarysmd.studiomdl.SkeletonBlock;
 import dev.thecodewarrior.binarysmd.studiomdl.TrianglesBlock;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.HashMap;

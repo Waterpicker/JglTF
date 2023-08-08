@@ -32,7 +32,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-assembly-plugin</artifactId>
-        <version>2.6</version>
+        <version>3.6.0</version>
         <configuration>
           <archive>
             <manifest>
@@ -81,7 +81,7 @@
     <dependency>
       <groupId>de.javagl</groupId>
       <artifactId>swing-tasks</artifactId>
-      <version>0.0.3</version>
+      <version>0.0.4</version>
     </dependency>
     <dependency>
       <groupId>de.javagl</groupId>
@@ -106,7 +106,7 @@
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
-      <version>2.13.2.1</version>
+      <version>2.15.2</version>
     </dependency>
   </dependencies>
 
